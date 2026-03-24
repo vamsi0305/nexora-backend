@@ -1,9 +1,10 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 
 class VoteCreate(BaseModel):
-    vote_type: str # 'upvote' or 'downvote'
+    vote_type: Optional[str] = None # 'upvote' or 'downvote'
+    value: Optional[Union[int, str]] = None
 
 class VoteResponse(BaseModel):
     id: str

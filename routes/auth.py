@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from services.supabase import supabase
-from utils.auth import get_current_user
 
 router = APIRouter()
 
@@ -11,6 +10,11 @@ class RegisterRequest(BaseModel):
     password: str
     full_name: str
     phone_number: str
+    college: Optional[str] = None
+    city: Optional[str] = None
+    bio: Optional[str] = None
+    language: Optional[str] = "en"
+    domain_interests: Optional[list[str]] = []
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -33,7 +37,12 @@ def register(request: RegisterRequest):
             "options": {
                 "data": {
                     "full_name": request.full_name,
-                    "phone_number": request.phone_number
+                    "phone_number": request.phone_number,
+                    "college": request.college,
+                    "city": request.city,
+                    "bio": request.bio,
+                    "language": request.language,
+                    "domain_interests": request.domain_interests,
                 }
             }
         })
@@ -45,14 +54,27 @@ def register(request: RegisterRequest):
         user_data = {
             "id": res.user.id,
             "name": request.full_name,
-            "phone": request.phone_number
+            "email": request.email,
+            "phone": request.phone_number,
+            "college": request.college,
+            "city": request.city,
+            "bio": request.bio,
+            "language": request.language,
+            "preferences": {
+                "domain_interests": request.domain_interests or []
+            },
         }
-        supabase.table("users").upsert(user_data).execute()
-        
+        user_row = supabase.table("users").upsert(user_data).execute()
+        created_user = user_row.data[0] if user_row.data else {
+            "id": res.user.id,
+            "email": request.email,
+            "name": request.full_name,
+        }
+
         return AuthResponse(
             access_token=res.session.access_token if res.session else "registration-successful-login-required",
             token_type="bearer",
-            user={"id": res.user.id, "email": res.user.email, "name": request.full_name}
+            user=created_user
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -66,11 +88,14 @@ def login(request: LoginRequest):
         })
         if not res.session:
             raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        user_row = supabase.table("users").select("*").eq("id", res.user.id).execute()
+        user = user_row.data[0] if user_row.data else {"id": res.user.id, "email": res.user.email}
             
         return AuthResponse(
             access_token=res.session.access_token,
             token_type="bearer",
-            user={"id": res.user.id, "email": res.user.email}
+            user=user
         )
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from utils.auth import get_current_user
 from services.supabase import supabase
 from models.comment import CommentCreate
+from services.notifications import create_notification
 
 router = APIRouter()
 
@@ -17,7 +18,19 @@ def create_comment(idea_id: str, comment: CommentCreate, current_user: dict = De
     data["user_id"] = current_user["id"]
     
     res = supabase.table("comments").insert(data).execute()
-    return res.data[0]
+    created = res.data[0]
+
+    idea = supabase.table("ideas").select("title, user_id").eq("id", idea_id).execute()
+    if idea.data and idea.data[0]["user_id"] != current_user["id"]:
+        create_notification(
+            idea.data[0]["user_id"],
+            "comment",
+            f"{current_user.get('name', 'Someone')} commented on your idea '{idea.data[0]['title']}'.",
+            idea_id,
+        )
+
+    full_comment = supabase.table("comments").select("*, users(name, avatar_url)").eq("id", created["id"]).execute()
+    return full_comment.data[0] if full_comment.data else created
 
 @router.delete("/comments/{comment_id}")
 def delete_comment(comment_id: str, current_user: dict = Depends(get_current_user)):

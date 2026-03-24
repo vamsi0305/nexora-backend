@@ -12,6 +12,7 @@ def get_ideas(
     domain: Optional[str] = None,
     city: Optional[str] = None,
     college: Optional[str] = None,
+    user_id: Optional[str] = None,
     sort: Optional[str] = "recent", # recent, trending, popular
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
@@ -25,11 +26,17 @@ def get_ideas(
             query = query.eq("city", city)
         if college:
             query = query.eq("college", college)
+        if user_id:
+            query = query.eq("user_id", user_id)
             
         if sort == "recent":
             query = query.order("created_at", desc=True)
+        elif sort == "trending":
+            query = query.order("views_count", desc=True).order("upvotes_count", desc=True)
         elif sort == "popular":
             query = query.order("upvotes_count", desc=True)
+        else:
+            query = query.order("created_at", desc=True)
         
         # Paginate query
         query = paginate(query, page, limit)
@@ -52,12 +59,14 @@ def create_idea(idea: IdeaCreate, current_user: dict = Depends(get_current_user)
     res = supabase.table("ideas").insert(data).execute()
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create idea")
-    return res.data[0]
+
+    created = supabase.table("ideas").select("*, users(name, avatar_url)").eq("id", res.data[0]["id"]).execute()
+    return created.data[0] if created.data else res.data[0]
 
 @router.get("/trending")
 def get_trending_ideas():
     # Very simple trending algorithm logic for now (order by views/votes)
-    res = supabase.table("ideas").select("*").order("views_count", desc=True).limit(10).execute()
+    res = supabase.table("ideas").select("*, users(name, avatar_url)").order("views_count", desc=True).limit(10).execute()
     return res.data
 
 @router.get("/{idea_id}")

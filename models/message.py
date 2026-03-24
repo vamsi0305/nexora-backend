@@ -1,8 +1,10 @@
 from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
 
 class MessageCreate(BaseModel):
     content: str
+    receiver_id: Optional[str] = None
 
 class MessageResponse(BaseModel):
     id: str
